@@ -23,3 +23,16 @@ var pledge = require('pledge');
 var myDeferral = pledge.defer();
 var myPromise1 = myDeferral.$promise;
 --------------------------------------------------------*/
+function $Promise() {
+
+}
+
+function Deferral() {
+
+}
+
+var defer = function() {
+	var defferal =  new Deferral();
+	defferal.$promise = new $Promise();
+	return defferal;
+};
