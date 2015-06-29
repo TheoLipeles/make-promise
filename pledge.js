@@ -65,45 +65,41 @@ Deferral.prototype.reject = function(err) {
 };
 
 $Promise.prototype.then = function(successCb, errorCb) {
-    var newPromise;
     var deferral = new Deferral();
-    newPromise = deferral.$promise;
-    newPromise.forwarder = deferral;
-
-    if (typeof successCb === "function") {
-        newPromise.successCb = successCb;
-    } else {
-        newPromise.successCb = false;
-    }
-    if (typeof errorCb === "function") {
-        newPromise.errorCb = errorCb;
-    } else {
-        newPromise.errorCb = false;
-    }
-
-    this.handlerGroups.push(newPromise);
+    var handlerGroup = {
+        successCb: typeof successCb === 'function' ? successCb : null,
+        errorCb: typeof errorCb === 'function' ? errorCb : null,
+        forwarder: deferral
+    };
+    this.handlerGroups.push(handlerGroup);
     this.callHandlers();
-    return newPromise;
+    return deferral.$promise;
 };
 
 $Promise.prototype.callHandlers = function() {
+    var s;
     for (var h = 0; h < this.handlerGroups.length; h++) {
         handler = this.handlerGroups[h];
         if (this.state === "resolved") {
-            if (handler.state === "pending") {
+            if (handler.forwarder.$promise.state === "pending") {
                 if (handler.successCb) {
                     try {
                         s = handler.successCb(this.value);
-                    } catch(err) {
+                    } catch (err) {
                         handler.forwarder.reject(err);
                     }
-                    if (s) {
-                        if (s instanceof $Promise) {
-                            s.then();
-                        }
-                        handler.forwarder.resolve(s);
+                    if (s && s instanceof $Promise) {
+
+                        s.then(function(value) {
+                            console.log(handler.forwarder);
+                            handler.forwarder.resolve(value);
+
+                        });
+
+                        s = null;
+
                     } else {
-                        handler.forwarder.resolve(this.value);
+                        handler.forwarder.resolve(s);
                     }
                 } else {
                     handler.forwarder.resolve(this.value);
@@ -111,12 +107,12 @@ $Promise.prototype.callHandlers = function() {
 
             }
         } else if (this.state === 'rejected') {
-            if (handler.state === 'pending') {
+            if (handler.forwarder.$promise.state === 'pending') {
                 if (handler.errorCb) {
                     var e;
                     try {
                         e = handler.errorCb(this.value);
-                    } catch(err) {
+                    } catch (err) {
                         handler.forwarder.reject(err);
                     }
                     if (e) {
@@ -128,11 +124,11 @@ $Promise.prototype.callHandlers = function() {
                     handler.forwarder.reject(this.value);
                 }
             }
-         } 
+        }
     }
 
     for (h = 0; h < this.handlerGroups.length; h++) {
-        if (this.handlerGroups[h].state === 'resolved') {
+        if (this.handlerGroups[h].forwarder.$promise.state === 'resolved') {
             this.handlerGroups.splice(h, 1);
         }
 
