@@ -28,11 +28,11 @@ function $Promise () {
     this.state = "pending";
     this.value = undefined;
     this.handlerGroups = [];
-};
+}
 
 function Deferral () {
-    this.$promise = new $Promise;
-};
+    this.$promise = new $Promise();
+}
 
 var defer = function() {
     return new Deferral(); 
@@ -46,7 +46,7 @@ Deferral.prototype.resolve = function(data) {
     else if (this.$promise.state === 'pending'){
     this.$promise.state = "resolved";
     }
-}
+};
 
 Deferral.prototype.reject = function (err) {
     if (err && this.$promise.state === 'pending') {
@@ -54,9 +54,9 @@ Deferral.prototype.reject = function (err) {
         this.$promise.state = "rejected";
     }
     else if (this.$promise.state === 'pending'){
-    this.$promise.state = "rejected"
+    this.$promise.state = "rejected";
     }
-}
+};
 
 
 
