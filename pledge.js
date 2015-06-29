@@ -28,6 +28,7 @@ function $Promise() {
     this.state = "pending";
     this.value = undefined;
     this.handlerGroups = [];
+    this.updateCbs = [];
 }
 
 function Deferral() {
@@ -62,13 +63,25 @@ Deferral.prototype.reject = function(err) {
     this.$promise.callHandlers();
 };
 
-$Promise.prototype.then = function(successCb, errorCb) {
+Deferral.prototype.notify = function(val) {
+    var $promise = this.$promise;
+    if ($promise.state === "pending") {
+        for (var cb = 0; cb < $promise.updateCbs.length; cb++) {
+            $promise.updateCbs[cb](val);   
+        }
+    }
+};
+
+$Promise.prototype.then = function(successCb, errorCb, updateCb) {
     var deferral = defer();
     var handlerGroup = {
         successCb: typeof successCb === 'function' ? successCb : null,
         errorCb: typeof errorCb === 'function' ? errorCb : null,
         forwarder: deferral
     };
+    if (typeof(updateCb) === "function") {
+        this.updateCbs.push(updateCb);
+    }
     this.handlerGroups.push(handlerGroup);
     this.callHandlers();
     deferral.$promise.identifier = ".THEN PROMISE";
