@@ -28,11 +28,12 @@ function $Promise() {
     this.state = "pending";
     this.value = undefined;
     this.handlerGroups = [];
+    this.returnPromise = null;
 }
 
 function Deferral() {
     this.$promise = new $Promise();
-    this.$promise.deferral = this;
+    this.$promise.forwarder = this;
 }
 
 var defer = function() {
@@ -46,6 +47,10 @@ Deferral.prototype.resolve = function(data) {
     } else if (this.$promise.state === 'pending') {
         this.$promise.state = "resolved";
     }
+    // if (this.$promise.value instanceof $Promise) {
+    //     this.$promise = this.$promise.value;
+    //     console.log(this.$promise);
+    // }
     this.$promise.callHandlers();
 };
 
@@ -60,7 +65,11 @@ Deferral.prototype.reject = function(err) {
 };
 
 $Promise.prototype.then = function(successCb, errorCb) {
-    var newPromise = new $Promise();
+    var newPromise;
+    var deferral = new Deferral();
+    newPromise = deferral.$promise;
+    newPromise.forwarder = deferral;
+
     if (typeof successCb === "function") {
         newPromise.successCb = successCb;
     } else {
@@ -74,6 +83,7 @@ $Promise.prototype.then = function(successCb, errorCb) {
 
     this.handlerGroups.push(newPromise);
     this.callHandlers();
+    return newPromise;
 };
 
 $Promise.prototype.callHandlers = function() {
@@ -82,22 +92,46 @@ $Promise.prototype.callHandlers = function() {
         if (this.state === "resolved") {
             if (handler.state === "pending") {
                 if (handler.successCb) {
-                    handler.successCb(this.value);
-                    handler.state = "resolved";
+                    try {
+                        s = handler.successCb(this.value);
+                    } catch(err) {
+                        handler.forwarder.reject(err);
+                    }
+                    if (s) {
+                        if (s instanceof $Promise) {
+                            s.then();
+                        }
+                        handler.forwarder.resolve(s);
+                    } else {
+                        handler.forwarder.resolve(this.value);
+                    }
+                } else {
+                    handler.forwarder.resolve(this.value);
                 }
 
             }
         } else if (this.state === 'rejected') {
             if (handler.state === 'pending') {
                 if (handler.errorCb) {
-                    handler.errorCb(this.value);
-                    handler.state = "resolved";
+                    var e;
+                    try {
+                        e = handler.errorCb(this.value);
+                    } catch(err) {
+                        handler.forwarder.reject(err);
+                    }
+                    if (e) {
+                        handler.forwarder.resolve(e);
+                    } else {
+                        handler.forwarder.reject(this.value);
+                    }
+                } else {
+                    handler.forwarder.reject(this.value);
                 }
             }
-        }
+         } 
     }
 
-    for (var h = 0; h < this.handlerGroups.length; h++) {
+    for (h = 0; h < this.handlerGroups.length; h++) {
         if (this.handlerGroups[h].state === 'resolved') {
             this.handlerGroups.splice(h, 1);
         }
@@ -108,5 +142,5 @@ $Promise.prototype.callHandlers = function() {
 
 
 $Promise.prototype.catch = function(errorHandler) {
-    this.then(null, errorHandler);
+    return this.then(null, errorHandler);
 };
