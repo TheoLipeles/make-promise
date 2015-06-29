@@ -28,7 +28,6 @@ function $Promise() {
     this.state = "pending";
     this.value = undefined;
     this.handlerGroups = [];
-    this.returnPromise = null;
 }
 
 function Deferral() {
@@ -41,15 +40,14 @@ var defer = function() {
 };
 
 Deferral.prototype.resolve = function(data) {
-    if (data && this.$promise.state === 'pending') {
+    if ((data || data === 0) && this.$promise.state === 'pending') {
         this.$promise.value = data;
         this.$promise.state = "resolved";
     } else if (this.$promise.state === 'pending') {
         this.$promise.state = "resolved";
     }
     // if (this.$promise.value instanceof $Promise) {
-    //     this.$promise = this.$promise.value;
-    //     console.log(this.$promise);
+    //     this.$promise = thi
     // }
     this.$promise.callHandlers();
 };
@@ -65,7 +63,7 @@ Deferral.prototype.reject = function(err) {
 };
 
 $Promise.prototype.then = function(successCb, errorCb) {
-    var deferral = new Deferral();
+    var deferral = defer();
     var handlerGroup = {
         successCb: typeof successCb === 'function' ? successCb : null,
         errorCb: typeof errorCb === 'function' ? errorCb : null,
@@ -73,36 +71,38 @@ $Promise.prototype.then = function(successCb, errorCb) {
     };
     this.handlerGroups.push(handlerGroup);
     this.callHandlers();
+    deferral.$promise.identifier = ".THEN PROMISE";
     return deferral.$promise;
 };
 
 $Promise.prototype.callHandlers = function() {
     var s;
+    var promiseVal = this.value; 
     for (var h = 0; h < this.handlerGroups.length; h++) {
         handler = this.handlerGroups[h];
         if (this.state === "resolved") {
             if (handler.forwarder.$promise.state === "pending") {
                 if (handler.successCb) {
                     try {
-                        s = handler.successCb(this.value);
+                        s = handler.successCb(promiseVal);
                     } catch (err) {
                         handler.forwarder.reject(err);
                     }
                     if (s && s instanceof $Promise) {
-
+                        var oldSDeferral = handler.forwarder;
                         s.then(function(value) {
-                            console.log(handler.forwarder);
-                            handler.forwarder.resolve(value);
-
+                            oldSDeferral.resolve(value);
                         });
 
                         s = null;
 
-                    } else {
+                    } else if(s) {
                         handler.forwarder.resolve(s);
+                    } else {
+                        handler.forwarder.resolve(promiseVal);    
                     }
                 } else {
-                    handler.forwarder.resolve(this.value);
+                    handler.forwarder.resolve(promiseVal);
                 }
 
             }
@@ -111,17 +111,24 @@ $Promise.prototype.callHandlers = function() {
                 if (handler.errorCb) {
                     var e;
                     try {
-                        e = handler.errorCb(this.value);
+                        e = handler.errorCb(promiseVal);
                     } catch (err) {
                         handler.forwarder.reject(err);
                     }
-                    if (e) {
+                    if (e && e instanceof $Promise) {
+                        var oldEDeferral = handler.forwarder;
+                        e.then(function(value) {
+                            oldEDeferral.resolve(value);
+                        });
+
+                        e = null;
+                    } else if (e) {
                         handler.forwarder.resolve(e);
                     } else {
-                        handler.forwarder.reject(this.value);
+                        handler.forwarder.resolve(promiseVal);
                     }
                 } else {
-                    handler.forwarder.reject(this.value);
+                    handler.forwarder.reject(promiseVal);
                 }
             }
         }
